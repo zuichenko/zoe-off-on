@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f9;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #e0f7fa; /* Бледно-голубой фон контейнера */
+      box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.1);
+      border-radius: 8px;
+    }
+    h1 {
+      text-align: center;
+      color: #00bcd4; /* Голубой цвет заголовка */
+      font-size: 20px;
+    }
+    h2 {
+      text-align: center;
+      color: #00bcd4; /* Голубой цвет заголовка */
+      font-size: 20px;
+    }
+    input, select {
+      width: 100%;
+      padding: 7px;
+      margin: 0 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 16px;
+      height: 40px;
+      margin-bottom: 10px;
+    }
+    button {
+      width: 100%;
+      padding: 7px;
+      margin: 5px 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 16px;
+    }
+    input:focus, select:focus {
+      border-color: #00bcd4; /* Голубой цвет при фокусе */
+      outline: none;
+    }
+    button {
+      background-color: #00bcd4; /* Голубой цвет кнопок */
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #00acc1; /* Тёмно-голубой цвет при наведении */
+    }
+    p {
+      text-align: center;
+      font-size: 18px;
+    }
+    .autocomplete-suggestions {
+      border: none;
+      max-height: 150px;
+      overflow-y: auto;
+      position: absolute;
+      width: calc(100% - 22px);
+      background-color: #fff;
+      z-index: 1000;
+    }
+    .autocomplete-suggestion {
+      padding: 10px;
+      cursor: pointer;
+    }
+    .autocomplete-suggestion:hover {
+      background-color: #3367d1;
+      color: white;
+    }
+    #queue {
+      font-size: 18px;
+      font-weight: bold;
+      color: black;
+      margin-top: 20px;
+      display: none;
+      text-align: left;
+    }
+    #queue-number {
+      font-size: 24px;
+      font-weight: bold;
+      color: white;
+      background-color: #dd1aa9;
+      padding: 5px 10px;
+      border-radius: 5px;
+    }
+    #loading {
+      font-size: 18px;
+      color: #FF5722;
+      text-align: center;
+      display: none;
+    }
+    #no-disconnect {
+      font-size: 24px;
+      font-weight: bold;
+      color: white;
+      background-color: #15ebdc;
+      text-align: center;
+      display: none;
+      padding: 5px 10px;
+      border-radius: 5px;
+    }
+    .button-container {
+  display: flex;
+  flex-direction: column; /* Вертикальное размещение кнопок */
+  gap: 0;
+}
+
+.button-container button {
+  width: 100%; /* Убедитесь, что кнопки занимают всю ширину контейнера */
+  padding: 12px; /* Однородное внутреннее отступление */
+  font-size: 16px; /* Однородный размер шрифта */
+  border: 1px solid #ddd; /* Однородный бордер */
+  border-radius: 4px; /* Однородные скругления углов */
+  background-color: #00bcd4; /* Цвет фона кнопок */
+  color: white; /* Цвет текста кнопок */
+  cursor: pointer; /* Курсор указателя для кнопок */
+  box-sizing: border-box; /* Убедитесь, что padding и border учитываются в ширине и высоте */
+  margin: 0;
+}
+.button-container button + button {
+  margin-top: 10px;
+}
+.button-container button:hover {
+  background-color: #00acc1; /* Тёмно-голубой цвет при наведении */
+}
+
+.button-container button:focus {
+  border-color: #00bcd4; /* Цвет бордера при фокусе */
+  outline: none; /* Уберите стандартное обводку браузера */
+}
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Щоб дізнатися чергу відключення,</h1>
+    <h2>виберіть вулицю та будинок</h2>
+    <div style="position: relative;">
+      <input type="text" id="street" placeholder="Почніть вводити назву вулиці" oninput="filterStreets()" autocomplete="off" />
+      <div id="street-suggestions" class="autocomplete-suggestions"></div>
+    </div>
+    <select id="house"></select>
+    <div class="button-container">
+      <button onclick="showQueue()">Показати чергу відключення</button>
+      <button onclick="clearData()">Очистити дані</button>
+    </div>
+    <p id="loading">Йде процес…</p>
+    <p id="queue">Черга відключення: <span id="queue-number"></span></p>
+    <p id="no-disconnect">Не вимикається</p>
+  </div>
+
+
+  <script>
+  var streetData = [];
+
+
+
+
+  function loadData() {
+    google.script.run.withSuccessHandler(function(data) {
+      streetData = data;
+    }).getData();
+  }
+
+
+
+
+  function filterStreets() {
+    var input = document.getElementById('street').value.toLowerCase();
+    var suggestionsBox = document.getElementById('street-suggestions');
+    suggestionsBox.innerHTML = ''; // Очистить предыдущие предложения
+    document.getElementById('queue').style.display = 'none'; // Скрыть "Черга відключення"
+    document.getElementById('no-disconnect').style.display = 'none'; // Скрыть "Не вимикається"
+    document.getElementById('house').innerHTML = ''; // Очистить список домов
+
+
+
+
+    if (input.length === 0) {
+      return; // Не показывать предложения, если ничего не введено
+    }
+
+
+
+
+    var matchingStreets = [...new Set(streetData.map(row => row[0]))].filter(street => street.toLowerCase().includes(input));
+
+
+
+
+    matchingStreets.forEach(function(street) {
+      var suggestionItem = document.createElement('div');
+      suggestionItem.className = 'autocomplete-suggestion';
+      suggestionItem.textContent = street;
+      suggestionItem.onclick = function() {
+        document.getElementById('street').value = street;
+        suggestionsBox.innerHTML = '';
+        loadHouses(street); // Загрузить дома для выбранной улицы
+      };
+      suggestionsBox.appendChild(suggestionItem);
+    });
+  }
+
+
+
+
+  function loadHouses(street) {
+  // Получаем список домов для выбранной улицы и преобразуем в уникальные значения
+  var houses = [...new Set(streetData.filter(row => row[0] === street).map(row => row[1]))];
+  
+  // Сортируем дома как числа
+  houses.sort((a, b) => {
+    return (parseInt(a) || 0) - (parseInt(b) || 0);
+  });
+
+  var houseSelect = document.getElementById('house');
+  houseSelect.innerHTML = ''; // Очистить список домов
+  if (houses.length > 0) {
+    houses.forEach(function(house) {
+      var option = document.createElement('option');
+      option.value = house;
+      option.text = house;
+      houseSelect.appendChild(option);
+    });
+  } else {
+    houseSelect.innerHTML = '<option>Немає будинків</option>';
+  }
+}
+  function showQueue() {
+    var street = document.getElementById('street').value.trim();
+    var house = document.getElementById('house').value.trim();
+    var queueElement = document.getElementById('queue');
+    var queueNumberElement = document.getElementById('queue-number');
+    var loadingElement = document.getElementById('loading');
+    var noDisconnectElement = document.getElementById('no-disconnect');
+
+
+
+
+    if (!street || !house) {
+      queueElement.style.display = 'none';
+      noDisconnectElement.style.display = 'none';
+      loadingElement.style.display = 'none';
+      return; // Не показывать ничего, если улица или дом пустые
+    }
+
+
+
+
+    queueElement.style.display = 'none'; // Скрыть очередь
+    noDisconnectElement.style.display = 'none'; // Скрыть "Не вимикається"
+    loadingElement.style.display = 'block'; // Показать сообщение "Йде процес…"
+
+
+
+
+    var queueData = streetData.filter(row => row[0] === street && row[1] === house);
+
+
+
+
+    loadingElement.style.display = 'none'; // Скрыть сообщение "Йде процес…"
+
+
+
+
+    if (queueData.length > 0) {
+      var values = queueData.map(row => row[2]);
+      var uniqueValues = [...new Set(values)];
+
+
+
+
+      if (uniqueValues.length === 0) {
+        noDisconnectElement.style.display = 'block'; // Показать "Не вимикається", если нет значений
+      } else if (uniqueValues.length === 1) {
+        var value = uniqueValues[0] || 'Не вимикається';
+        if (value === 'Не вимикається') {
+          queueNumberElement.innerHTML = value;
+          queueNumberElement.style.backgroundColor = '#4CAF50'; // Зеленая заливка
+          queueNumberElement.style.color = 'white'; // Белый цвет текста
+        } else {
+          queueNumberElement.innerHTML = value;
+          queueNumberElement.style.backgroundColor = ''; // Сброс заливки
+          queueNumberElement.style.color = ''; // Сброс цвета текста
+        }
+        queueElement.style.display = 'block'; // Показать строку с очередью
+      } else {
+        var displayValues = uniqueValues.map(value => value.trim() === "" ? "Не вимикається" : value);
+        queueNumberElement.innerHTML = displayValues.join(' <span style="color: inherit;">або</span> ');
+        queueElement.style.display = 'block'; // Показать строку с очередью
+      }
+    } else {
+      noDisconnectElement.style.display = 'block'; // Показать "Не вимикається"
+    }
+  }
+
+
+
+
+  function clearData() {
+    document.getElementById('street').value = '';
+    document.getElementById('house').innerHTML = ''; // Очистить список домов
+    document.getElementById('queue').style.display = 'none'; // Скрыть очередь
+    document.getElementById('no-disconnect').style.display = 'none'; // Скрыть "Не вимикається"
+  }
+
+
+
+
+  document.getElementById('house').addEventListener('change', function() {
+    var queueElement = document.getElementById('queue');
+    queueElement.style.display = 'none'; // Скрыть строку "Черга відключення"
+    document.getElementById('no-disconnect').style.display = 'none'; // Скрыть "Не вимикається"
+  });
+
+
+window.onload = loadData;
+
+</script>
+
+
+</body>
+</html>
